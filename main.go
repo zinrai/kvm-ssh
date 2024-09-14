@@ -19,11 +19,9 @@ type VMInfo struct {
 }
 
 var (
-	user         string
-	bridge       string
-	localPort    int
-	remotePort   int
-	forwardLocal bool
+	user   string
+	bridge string
+	ports  []string
 )
 
 func checkCommand(name string) bool {
@@ -77,7 +75,7 @@ func getVMIP(vmName, bridgeName string) (string, error) {
 	return "", fmt.Errorf("VM not found: %s", vmName)
 }
 
-func sshToVM(vmName, user, bridgeName string, localPort, remotePort int, forwardLocal bool) error {
+func sshToVM(vmName, user, bridgeName string, ports []string, isForward bool) error {
 	ip, err := getVMIP(vmName, bridgeName)
 	if err != nil {
 		return err
@@ -88,10 +86,14 @@ func sshToVM(vmName, user, bridgeName string, localPort, remotePort int, forward
 	}
 
 	var sshArgs []string
-	if forwardLocal {
-		sshArgs = append(sshArgs, "-L", fmt.Sprintf("%d:localhost:%d", localPort, remotePort))
+	if isForward {
+		for _, port := range ports {
+			sshArgs = append(sshArgs, "-L", fmt.Sprintf("localhost:%s:localhost:%s", port, port))
+		}
 	}
 	sshArgs = append(sshArgs, fmt.Sprintf("%s@%s", user, ip))
+
+	fmt.Printf("Executing: ssh %s\n", strings.Join(sshArgs, " "))
 
 	sshCmd := exec.Command("ssh", sshArgs...)
 	sshCmd.Stdin = os.Stdin
@@ -127,17 +129,17 @@ var connectCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vmName := args[0]
-		return sshToVM(vmName, user, bridge, 0, 0, false)
+		return sshToVM(vmName, user, bridge, nil, false)
 	},
 }
 
 var forwardCmd = &cobra.Command{
 	Use:   "forward [vm_name]",
-	Short: "Forward a port from a KVM virtual machine to the local machine",
+	Short: "Forward ports from a KVM virtual machine to the local machine",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vmName := args[0]
-		return sshToVM(vmName, user, bridge, localPort, remotePort, true)
+		return sshToVM(vmName, user, bridge, ports, true)
 	},
 }
 
@@ -151,10 +153,8 @@ func init() {
 
 	forwardCmd.Flags().StringVarP(&user, "user", "u", user, "SSH user")
 	forwardCmd.Flags().StringVarP(&bridge, "bridge", "b", bridge, "Bridge name")
-	forwardCmd.Flags().IntVarP(&localPort, "local-port", "l", 0, "Local port to forward to")
-	forwardCmd.Flags().IntVarP(&remotePort, "remote-port", "r", 0, "Remote port on the VM")
-	forwardCmd.MarkFlagRequired("local-port")
-	forwardCmd.MarkFlagRequired("remote-port")
+	forwardCmd.Flags().StringSliceVarP(&ports, "port", "p", []string{}, "Ports to forward (comma-separated)")
+	forwardCmd.MarkFlagRequired("port")
 
 	rootCmd.AddCommand(listCmd, connectCmd, forwardCmd)
 }

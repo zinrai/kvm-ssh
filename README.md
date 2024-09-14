@@ -1,4 +1,4 @@
-# kvm-ssh: KVM SSH Connection and Port Forwarding Tool
+# KVM SSH Connection and Port Forwarding Tool
 
 `kvm-ssh` is a command-line tool designed to simplify SSH connections to KVM (Kernel-based Virtual Machine) instances and provide easy port forwarding capabilities.
 
@@ -6,7 +6,7 @@
 
 - List all running KVM virtual machines
 - Easily connect to a specific KVM virtual machine via SSH
-- Forward ports from a KVM virtual machine to the local machine
+- Forward multiple ports from a KVM virtual machine to the local machine
 - Sensible defaults for common options
 
 ## Notes
@@ -75,11 +75,40 @@ If you need to specify a different user or bridge:
 $ kvm-ssh connect --user <ssh_username> --bridge <bridge_name> <vm_name>
 ```
 
-### Forward a port from a KVM virtual machine to the local machine
+### Forward ports from a KVM virtual machine to the local machine
 
 ```bash
-$ kvm-ssh forward --local-port <local_port> --remote-port <remote_port> <vm_name>
+$ kvm-ssh forward --port <port1>,<port2>,... <vm_name>
 ```
+
+Example:
+```bash
+$ kvm-ssh forward -u debian --port 2375,40413 bookworm64-docker
+```
+
+This will forward ports 2375 and 40413 from the VM named "bookworm64-docker" to the same local ports.
+
+## Examples
+
+1. List all running VMs:
+   ```bash
+   $ kvm-ssh list
+   ```
+
+2. Connect to a VM named "ubuntu-vm":
+   ```bash
+   $ kvm-ssh connect ubuntu-vm
+   ```
+
+3. Connect to a VM named "debian-vm" with a specific user and bridge:
+   ```bash
+   $ kvm-ssh connect --user john --bridge br0 debian-vm
+   ```
+
+4. Forward multiple ports from a VM:
+   ```bash
+   $ kvm-ssh forward --user debian --port 2375,40413 bookworm64-docker
+   ```
 
 ## License
 
