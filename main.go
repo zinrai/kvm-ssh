@@ -19,51 +19,29 @@ type VMInfo struct {
 }
 
 var (
-	user   string
-	bridge string
-	ports  []string
+	user  string
+	ports []string
 )
 
-func checkCommand(name string) bool {
-	_, err := exec.LookPath(name)
-	return err == nil
-}
-
-func getVMList() ([]string, error) {
-	if !checkCommand("sudo") {
-		return nil, fmt.Errorf("sudo command not found")
-	}
-	if !checkCommand("virsh") {
-		return nil, fmt.Errorf("virsh command not found")
-	}
-
-	cmd := exec.Command("sudo", "virsh", "list", "--name", "--state-running")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute virsh command: %v\nOutput: %s", err, output)
-	}
-
-	vmNames := strings.Split(strings.TrimSpace(string(output)), "\n")
-	var filteredVMNames []string
-	for _, name := range vmNames {
-		if name != "" {
-			filteredVMNames = append(filteredVMNames, name)
-		}
-	}
-
-	return filteredVMNames, nil
-}
-
-func getVMIP(vmName, bridgeName string) (string, error) {
+func getVMList(bridgeName string) ([]VMInfo, error) {
 	statusFile := fmt.Sprintf("/var/lib/libvirt/dnsmasq/%s.status", bridgeName)
 	data, err := os.ReadFile(statusFile)
 	if err != nil {
-		return "", fmt.Errorf("failed to read status file: %v", err)
+		return nil, fmt.Errorf("failed to read status file: %v", err)
 	}
 
 	var vmInfos []VMInfo
 	if err := json.Unmarshal(data, &vmInfos); err != nil {
-		return "", fmt.Errorf("failed to parse status file: %v", err)
+		return nil, fmt.Errorf("failed to parse status file: %v", err)
+	}
+
+	return vmInfos, nil
+}
+
+func getVMIP(vmName, bridgeName string) (string, error) {
+	vmInfos, err := getVMList(bridgeName)
+	if err != nil {
+		return "", err
 	}
 
 	for _, info := range vmInfos {
@@ -79,10 +57,6 @@ func sshToVM(vmName, user, bridgeName string, ports []string, isForward bool) er
 	ip, err := getVMIP(vmName, bridgeName)
 	if err != nil {
 		return err
-	}
-
-	if !checkCommand("ssh") {
-		return fmt.Errorf("ssh command not found")
 	}
 
 	var sshArgs []string
@@ -112,12 +86,13 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all running KVM virtual machines",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		vms, err := getVMList()
+		bridge, _ := cmd.Flags().GetString("bridge")
+		vmInfos, err := getVMList(bridge)
 		if err != nil {
 			return err
 		}
-		for _, vm := range vms {
-			fmt.Println(vm)
+		for _, vm := range vmInfos {
+			fmt.Printf("Hostname: %s, IP: %s\n", vm.Hostname, vm.IPAddress)
 		}
 		return nil
 	},
@@ -129,6 +104,8 @@ var connectCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vmName := args[0]
+		bridge, _ := cmd.Flags().GetString("bridge")
+		user, _ := cmd.Flags().GetString("user")
 		return sshToVM(vmName, user, bridge, nil, false)
 	},
 }
@@ -139,21 +116,25 @@ var forwardCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		vmName := args[0]
+		bridge, _ := cmd.Flags().GetString("bridge")
+		user, _ := cmd.Flags().GetString("user")
+		ports, _ := cmd.Flags().GetStringSlice("port")
 		return sshToVM(vmName, user, bridge, ports, true)
 	},
 }
 
 func init() {
-	// Set default values
-	bridge = "virbr0"
+	defaultBridge := "virbr0"
 	user = os.Getenv("USER")
 
-	connectCmd.Flags().StringVarP(&user, "user", "u", user, "SSH user")
-	connectCmd.Flags().StringVarP(&bridge, "bridge", "b", bridge, "Bridge name")
+	listCmd.Flags().StringP("bridge", "b", defaultBridge, "Bridge name")
 
-	forwardCmd.Flags().StringVarP(&user, "user", "u", user, "SSH user")
-	forwardCmd.Flags().StringVarP(&bridge, "bridge", "b", bridge, "Bridge name")
-	forwardCmd.Flags().StringSliceVarP(&ports, "port", "p", []string{}, "Ports to forward (comma-separated)")
+	connectCmd.Flags().StringP("bridge", "b", defaultBridge, "Bridge name")
+	connectCmd.Flags().StringP("user", "u", user, "SSH user")
+
+	forwardCmd.Flags().StringP("bridge", "b", defaultBridge, "Bridge name")
+	forwardCmd.Flags().StringP("user", "u", user, "SSH user")
+	forwardCmd.Flags().StringSliceP("port", "p", []string{}, "Ports to forward (comma-separated)")
 	forwardCmd.MarkFlagRequired("port")
 
 	rootCmd.AddCommand(listCmd, connectCmd, forwardCmd)

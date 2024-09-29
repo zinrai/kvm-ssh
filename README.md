@@ -4,14 +4,13 @@
 
 ## Features
 
-- List all running KVM virtual machines
+- List all running KVM virtual machines using information from dnsmasq status files
 - Easily connect to a specific KVM virtual machine via SSH
 - Forward multiple ports from a KVM virtual machine to the local machine
 - Sensible defaults for common options
 
 ## Notes
 
-- This tool requires `sudo` access to run `virsh` commands.
 - Ensure that the `ssh` command is available on your system.
 - The tool reads VM information from `/var/lib/libvirt/dnsmasq/<bridge_name>.status`.
 
@@ -52,7 +51,7 @@ Where `<command>` is one of `list`, `connect`, or `forward`.
 
 ### Default Values
 
-- The default bridge name is set to `virbr0`.
+- The default bridge name is set to `virbr0` for all commands.
 - The default user is set to the value of the `USER` environment variable.
 
 You only need to specify `--bridge` or `--user` if you want to use a different value.
@@ -61,6 +60,12 @@ You only need to specify `--bridge` or `--user` if you want to use a different v
 
 ```bash
 $ kvm-ssh list
+```
+
+To use a different bridge:
+
+```bash
+$ kvm-ssh list --bridge <bridge_name>
 ```
 
 ### Connect to a KVM virtual machine
@@ -81,33 +86,42 @@ $ kvm-ssh connect --user <ssh_username> --bridge <bridge_name> <vm_name>
 $ kvm-ssh forward --port <port1>,<port2>,... <vm_name>
 ```
 
-Example:
-```bash
-$ kvm-ssh forward -u debian --port 2375,40413 bookworm64-docker
-```
+To specify a different user or bridge:
 
-This will forward ports 2375 and 40413 from the VM named "bookworm64-docker" to the same local ports.
+```bash
+$ kvm-ssh forward --user <ssh_username> --bridge <bridge_name> --port <port1>,<port2>,... <vm_name>
+```
 
 ## Examples
 
-1. List all running VMs:
+1. List all running VMs (using default bridge virbr0):
    ```bash
    $ kvm-ssh list
    ```
 
-2. Connect to a VM named "ubuntu-vm":
+2. List all running VMs on a specific bridge:
+   ```bash
+   $ kvm-ssh list --bridge br0
+   ```
+
+3. Connect to a VM named "ubuntu-vm" (using default bridge and user):
    ```bash
    $ kvm-ssh connect ubuntu-vm
    ```
 
-3. Connect to a VM named "debian-vm" with a specific user and bridge:
+4. Connect to a VM named "debian-vm" with a specific user and bridge:
    ```bash
    $ kvm-ssh connect --user john --bridge br0 debian-vm
    ```
 
-4. Forward multiple ports from a VM:
+5. Forward multiple ports from a VM (using default bridge and user):
    ```bash
-   $ kvm-ssh forward --user debian --port 2375,40413 bookworm64-docker
+   $ kvm-ssh forward --port 2375,40413 bookworm64-docker
+   ```
+
+6. Forward ports with specific user and bridge:
+   ```bash
+   $ kvm-ssh forward --user debian --bridge br0 --port 2375,40413 bookworm64-docker
    ```
 
 ## License
